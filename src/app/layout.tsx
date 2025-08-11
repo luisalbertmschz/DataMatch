@@ -4,7 +4,7 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'DataMatch - Comparador de Archivos Excel',
+  title: 'ExcelSync Pro - Comparador de Archivos Excel',
   description: 'Herramienta profesional para análisis y sincronización de datos',
   generator: 'v0.dev',
 }

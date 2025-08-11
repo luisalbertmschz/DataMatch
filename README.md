@@ -1,8 +1,8 @@
-# DataMatch - Herramienta de Comparación de Archivos Excel
+# ExcelSync Pro - Herramienta de Comparación de Archivos Excel
 
 ## 🚀 Descripción
 
-DataMatch es una herramienta profesional para análisis y sincronización de datos entre archivos Excel y bases de datos Oracle. Permite comparar archivos, generar scripts SQL de consulta y actualización, y mantener la integridad de los datos.
+ExcelSync Pro es una herramienta profesional para análisis y sincronización de datos entre archivos Excel y bases de datos Oracle. Permite comparar archivos, generar scripts SQL de consulta y actualización, y mantener la integridad de los datos.
 
 ## ✨ Características Principales
 
@@ -109,4 +109,4 @@ Para soporte técnico o preguntas, contacta al equipo de desarrollo.
 
 ---
 
-**DataMatch** - Transformando la gestión de datos, una comparación a la vez. 🚀
+**ExcelSync Pro** - Transformando la gestión de datos, una comparación a la vez. 🚀
