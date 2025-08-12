@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
+import { CodeEditor } from "@/components/ui/code-editor"
 
 interface FileData {
   name: string
@@ -1193,25 +1194,25 @@ ORDER BY instalacao;
                 
                 {/* Script de Consulta Generado */}
                 {queryScript && (
-                  <div className="mt-6 p-4 bg-white border border-orange-200 rounded-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-lg font-semibold text-orange-800">
-                        Script de Consulta SQL Generado
-                      </h4>
-                      <Button
-                        onClick={copyQueryScript}
-                        variant="outline"
-                        size="sm"
-                        className="border-orange-300 text-orange-600 hover:bg-orange-50"
-                      >
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copiar Script
-                      </Button>
-                    </div>
-                    
-                    <div className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto">
-                      <pre className="text-sm whitespace-pre-wrap">{queryScript}</pre>
-                    </div>
+                  <div className="mt-6">
+                    <CodeEditor
+                      code={queryScript}
+                      language="sql"
+                      title="Script de Consulta SQL"
+                      onCopy={copyQueryScript}
+                      onDownload={() => {
+                        const blob = new Blob([queryScript], { type: "text/plain" })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement("a")
+                        a.href = url
+                        a.download = `script_consulta_${file1.hojaProcesada}_${new Date().toISOString().split("T")[0]}.sql`
+                        document.body.appendChild(a)
+                        a.click()
+                        document.body.removeChild(a)
+                        URL.revokeObjectURL(url)
+                      }}
+                      className="border-orange-200"
+                    />
                     
                     <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-800">
@@ -1617,11 +1618,13 @@ ORDER BY instalacao;
                     </div>
                   </div>
                   
-                  <Textarea
-                    value={scripts}
-                    readOnly
-                    className="min-h-[500px] bg-gray-50 border-gray-200 text-gray-900 font-mono text-sm leading-relaxed resize-none"
-                    placeholder="Los scripts SQL aparecerán aquí una vez generados..."
+                  <CodeEditor
+                    code={scripts}
+                    language="sql"
+                    title="Scripts de Actualización SQL"
+                    onCopy={copyScripts}
+                    onDownload={downloadScripts}
+                    className="border-green-200"
                   />
                 </div>
               </div>
