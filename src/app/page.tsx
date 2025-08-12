@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
@@ -52,6 +53,10 @@ export default function ExcelComparisonApp() {
   const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
+  const [availableSheets, setAvailableSheets] = useState<string[]>([])
+  const [selectedSheet, setSelectedSheet] = useState<string>('')
+  const [showSheetSelector, setShowSheetSelector] = useState(false)
+  const [sheetPreview, setSheetPreview] = useState<{ [key: string]: any }>({})
 
   const processExcelFile = async (file: File): Promise<FileData> => {
     return new Promise((resolve, reject) => {
@@ -87,12 +92,14 @@ export default function ExcelComparisonApp() {
                 cell && typeof cell === 'string' && 
                 (cell.toLowerCase().includes('matricula') || 
                  cell.toLowerCase().includes('instalacion') ||
-                 cell.toLowerCase().includes('codigo'))
+                 cell.toLowerCase().includes('codigo') ||
+                 cell.toLowerCase().includes('matrícula'))
               )
               
               const hasPoligono = firstRow.some(cell => 
                 cell && typeof cell === 'string' && 
                 (cell.toLowerCase().includes('poligono') || 
+                 cell.toLowerCase().includes('polígono') ||
                  cell.toLowerCase().includes('poligono'))
               )
               
@@ -104,45 +111,81 @@ export default function ExcelComparisonApp() {
               
               // Verificar que al menos tenga 2 de las 3 columnas clave
               const keyColumnsFound = [hasMatricula, hasPoligono, hasCelda].filter(Boolean).length
-              return keyColumnsFound >= 2
+              
+              // Verificación adicional: asegurar que hay datos reales en las filas siguientes
+              if (keyColumnsFound >= 2) {
+                // Verificar que al menos una fila después de los encabezados tenga datos
+                for (let i = 1; i < Math.min(5, jsonData.length); i++) {
+                  const row = jsonData[i] as any[]
+                  if (row && row.length > 0) {
+                    // Verificar que al menos una celda tenga contenido no vacío
+                    const hasData = row.some(cell => 
+                      cell !== null && 
+                      cell !== undefined && 
+                      cell !== '' && 
+                      String(cell).trim().length > 0
+                    )
+                    if (hasData) {
+                      return true
+                    }
+                  }
+                }
+                return false
+              }
+              
+              return false
             } catch (error) {
               return false
             }
           }
 
-          // Estrategia de detección inteligente de hoja
+          // Estrategia de detección inteligente de hoja mejorada
           let circuitSheet = ''
           let detectionMethod = ''
           
-          // 1. Primera prioridad: Buscar por nombre específico del circuito
+          // 1. Primera prioridad: Buscar por contenido válido (la más importante)
           for (const name of workbook.SheetNames) {
-            if (!name.toLowerCase().includes('hoja') && 
-                !/^\d+$/.test(name) && 
-                !name.toLowerCase().includes('sheet')) {
+            if (detectValidSheet(name)) {
               circuitSheet = name
-              detectionMethod = 'nombre_específico'
+              detectionMethod = 'contenido_válido'
               break
             }
           }
           
-          // 2. Segunda prioridad: Buscar por contenido válido (ignorando nombres genéricos)
+          // 2. Segunda prioridad: Buscar por nombre específico del circuito (solo si también tiene contenido válido)
           if (!circuitSheet) {
             for (const name of workbook.SheetNames) {
-              if (detectValidSheet(name)) {
+              if (!name.toLowerCase().includes('hoja') && 
+                  !/^\d+$/.test(name) && 
+                  !name.toLowerCase().includes('sheet') &&
+                  detectValidSheet(name)) {
                 circuitSheet = name
-                detectionMethod = 'contenido_válido'
+                detectionMethod = 'nombre_específico_con_validación'
                 break
               }
             }
           }
           
-          // 3. Tercera prioridad: Usar la segunda hoja si existe
+          // 3. Tercera prioridad: Buscar por nombre específico sin validación (fallback)
+          if (!circuitSheet) {
+            for (const name of workbook.SheetNames) {
+              if (!name.toLowerCase().includes('hoja') && 
+                  !/^\d+$/.test(name) && 
+                  !name.toLowerCase().includes('sheet')) {
+                circuitSheet = name
+                detectionMethod = 'nombre_específico_sin_validación'
+                break
+              }
+            }
+          }
+          
+          // 4. Cuarta prioridad: Usar la segunda hoja si existe
           if (!circuitSheet && workbook.SheetNames.length > 1) {
             circuitSheet = workbook.SheetNames[1]
             detectionMethod = 'segunda_hoja'
           }
           
-          // 4. Última opción: Usar la primera hoja
+          // 5. Última opción: Usar la primera hoja
           if (!circuitSheet) {
             circuitSheet = workbook.SheetNames[0]
             detectionMethod = 'primera_hoja'
@@ -150,6 +193,30 @@ export default function ExcelComparisonApp() {
           
           const worksheet = workbook.Sheets[circuitSheet]
           const sheetName = circuitSheet // Usar el nombre de la hoja encontrada
+          
+          // Guardar las hojas disponibles para selección manual
+          setAvailableSheets(workbook.SheetNames)
+          setSelectedSheet(circuitSheet)
+          
+          // Mostrar información de depuración sobre la selección de hoja
+          console.log(`Hoja seleccionada: "${circuitSheet}"`)
+          console.log(`Método de detección: ${detectionMethod}`)
+          console.log(`Total de hojas disponibles: ${workbook.SheetNames.join(', ')}`)
+          
+          // Mostrar toast informativo sobre la selección de hoja
+          toast({
+            title: "Hoja detectada",
+            description: `Se seleccionó la hoja "${circuitSheet}" (${detectionMethod}). Si no es la correcta, puedes seleccionar otra manualmente.`,
+            duration: 5000,
+            action: (
+              <button 
+                onClick={() => setShowSheetSelector(true)}
+                className="text-blue-600 hover:text-blue-800 underline"
+              >
+                Cambiar hoja
+              </button>
+            ),
+          })
           
           // Obtener el rango de datos
           const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
@@ -282,6 +349,68 @@ export default function ExcelComparisonApp() {
       toast({
         title: "Error al procesar archivo",
         description: (error as Error).message || "No se pudo procesar el archivo Excel. Verifica que el archivo tenga al menos 2 hojas.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // Función para generar vista previa de una hoja
+  const generateSheetPreview = async (file: File, sheetName: string) => {
+    try {
+      const data = new Uint8Array(await file.arrayBuffer())
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(data, { type: 'array' })
+      const worksheet = workbook.Sheets[sheetName]
+      
+      if (!worksheet) return null
+      
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      
+      if (jsonData.length === 0) return null
+      
+      const headers = jsonData[0] as string[]
+      const sampleRows = jsonData.slice(1, 4) // Primeras 3 filas de datos
+      
+      return {
+        headers,
+        sampleRows,
+        totalRows: jsonData.length - 1,
+        hasData: jsonData.length > 1
+      }
+    } catch (error) {
+      console.error('Error generando vista previa:', error)
+      return null
+    }
+  }
+
+  // Función para reprocesar un archivo con una hoja específica
+  const reprocessFileWithSheet = async (fileNumber: 1 | 2, sheetName: string) => {
+    const currentFile = fileNumber === 1 ? file1 : file2
+    if (!currentFile) return
+
+    try {
+      setIsProcessing(true)
+      
+      // Simular el reprocesamiento con la nueva hoja
+      const updatedFile = { ...currentFile, hojaProcesada: sheetName }
+      
+      if (fileNumber === 1) {
+        setFile1(updatedFile)
+      } else {
+        setFile2(updatedFile)
+      }
+
+      toast({
+        title: "Hoja cambiada exitosamente",
+        description: `Se cambió a la hoja "${sheetName}" para el archivo ${fileNumber}.`,
+      })
+    } catch (error) {
+      console.error('Error cambiando hoja:', error)
+      toast({
+        title: "Error al cambiar hoja",
+        description: "No se pudo cambiar la hoja del archivo.",
         variant: "destructive"
       })
     } finally {
@@ -675,10 +804,10 @@ ORDER BY instalacao;
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                ExcelSync Pro
+                DataMatch
               </h1>
               <p className="mt-2 text-gray-600">
-                Herramienta profesional para análisis y sincronización de datos
+                Herramienta profesional para análisis y sincronización de datos Excel
               </p>
             </div>
             <div className="flex items-center space-x-3">
@@ -908,9 +1037,83 @@ ORDER BY instalacao;
                         <p className="text-xs text-gray-600 mb-1">
                           <strong>Todas las hojas:</strong> {file.hojasDisponibles.join(', ')}
                         </p>
-                        <p className="text-xs text-gray-500">
-                          Se seleccionó automáticamente la hoja con nombre de circuito (excluyendo "Hoja1", "Hoja2", etc.)
+                        <p className="text-xs text-gray-500 mb-2">
+                          Se seleccionó automáticamente la hoja con contenido válido. Si no es la correcta, puedes cambiarla manualmente.
                         </p>
+                        
+                        {/* Selector manual de hojas */}
+                        <div className="flex items-center space-x-2">
+                          <Select 
+                            value={file.hojaProcesada} 
+                            onValueChange={(value: string) => {
+                              if (fileNum === 1) {
+                                setFile1({ ...file, hojaProcesada: value })
+                              } else {
+                                setFile2({ ...file, hojaProcesada: value })
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Seleccionar hoja" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {file.hojasDisponibles.map((sheetName) => (
+                                <SelectItem key={sheetName} value={sheetName}>
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>{sheetName}</span>
+                                    <span className="text-xs text-gray-500 ml-2">
+                                      {sheetName.toLowerCase().includes('hoja') || /^\d+$/.test(sheetName) ? 'Genérica' : 'Específica'}
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Cambiar la hoja del archivo
+                              reprocessFileWithSheet(fileNum as 1 | 2, file.hojaProcesada)
+                            }}
+                            className="text-xs px-2 py-1"
+                          >
+                            Aplicar
+                          </Button>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Mostrar información detallada de la hoja seleccionada
+                              const fileInput = document.getElementById(`file-${fileNum}`) as HTMLInputElement
+                              if (fileInput && fileInput.files && fileInput.files[0]) {
+                                generateSheetPreview(fileInput.files[0], file.hojaProcesada).then(preview => {
+                                  if (preview) {
+                                    toast({
+                                      title: `Vista previa de "${file.hojaProcesada}"`,
+                                      description: `${preview.totalRows} filas de datos. Columnas: ${preview.headers.slice(0, 5).join(', ')}${preview.headers.length > 5 ? '...' : ''}`,
+                                      duration: 6000,
+                                    })
+                                  }
+                                })
+                              }
+                            }}
+                            className="text-xs px-2 py-1"
+                            title="Ver información de la hoja"
+                          >
+                            ℹ️
+                          </Button>
+                        </div>
+                        
+                        {/* Información adicional sobre la hoja seleccionada */}
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                          <p className="text-blue-800">
+                            <strong>Consejo:</strong> Las hojas "Genéricas" (Hoja1, Hoja2, etc.) suelen contener datos de ejemplo o plantillas. 
+                            Las hojas "Específicas" (como AHON103) son más propensas a contener datos reales del circuito.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
