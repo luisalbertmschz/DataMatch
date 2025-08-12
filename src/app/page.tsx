@@ -77,70 +77,107 @@ export default function ExcelComparisonApp() {
             throw new Error('El archivo Excel no contiene hojas')
           }
           
-          // Función para detectar si una hoja contiene datos válidos de transformadoras
-          const detectValidSheet = (sheetName: string): boolean => {
-            try {
-              const worksheet = workbook.Sheets[sheetName]
-              const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-              
-              // Verificar que tenga suficientes filas y columnas
-              if (jsonData.length < 3) return false
-              
-              // Buscar columnas clave en las primeras filas
-              const firstRow = jsonData[0] as string[]
-              if (!firstRow || firstRow.length < 3) return false
-              
-              // Buscar patrones de columnas que indiquen datos de transformadoras
-              const hasMatricula = firstRow.some(cell => 
-                cell && typeof cell === 'string' && 
-                (cell.toLowerCase().includes('matricula') || 
-                 cell.toLowerCase().includes('instalacion') ||
-                 cell.toLowerCase().includes('codigo') ||
-                 cell.toLowerCase().includes('matrícula'))
-              )
-              
-              const hasPoligono = firstRow.some(cell => 
-                cell && typeof cell === 'string' && 
-                (cell.toLowerCase().includes('poligono') || 
-                 cell.toLowerCase().includes('polígono') ||
-                 cell.toLowerCase().includes('poligono'))
-              )
-              
-              const hasCelda = firstRow.some(cell => 
-                cell && typeof cell === 'string' && 
-                (cell.toLowerCase().includes('celda') || 
-                 cell.toLowerCase().includes('celda'))
-              )
-              
-              // Verificar que al menos tenga 2 de las 3 columnas clave
-              const keyColumnsFound = [hasMatricula, hasPoligono, hasCelda].filter(Boolean).length
-              
-              // Verificación adicional: asegurar que hay datos reales en las filas siguientes
-              if (keyColumnsFound >= 2) {
-                // Verificar que al menos una fila después de los encabezados tenga datos
-                for (let i = 1; i < Math.min(5, jsonData.length); i++) {
-                  const row = jsonData[i] as any[]
-                  if (row && row.length > 0) {
-                    // Verificar que al menos una celda tenga contenido no vacío
-                    const hasData = row.some(cell => 
-                      cell !== null && 
-                      cell !== undefined && 
-                      cell !== '' && 
-                      String(cell).trim().length > 0
-                    )
-                    if (hasData) {
-                      return true
-                    }
-                  }
-                }
-                return false
-              }
-              
-              return false
-            } catch (error) {
-              return false
+            // Función para detectar si una hoja contiene datos válidos de transformadoras
+  const detectValidSheet = (sheetName: string): boolean => {
+    try {
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      
+      // Verificar que tenga suficientes filas y columnas
+      if (jsonData.length < 3) return false
+      
+      // Buscar columnas clave en las primeras filas
+      const firstRow = jsonData[0] as string[]
+      if (!firstRow || firstRow.length < 3) return false
+      
+      // Buscar patrones de columnas que indiquen datos de transformadoras
+      const hasMatricula = firstRow.some(cell => 
+        cell && typeof cell === 'string' && 
+        (cell.toLowerCase().includes('matricula') || 
+         cell.toLowerCase().includes('instalacion') ||
+         cell.toLowerCase().includes('codigo') ||
+         cell.toLowerCase().includes('matrícula') ||
+         cell.toLowerCase().includes('id'))
+      )
+      
+      const hasPoligono = firstRow.some(cell => 
+        cell && typeof cell === 'string' && 
+        (cell.toLowerCase().includes('poligono') || 
+         cell.toLowerCase().includes('polígono') ||
+         cell.toLowerCase().includes('cod_poligono') ||
+         cell.toLowerCase().includes('poligono'))
+      )
+      
+      const hasCelda = firstRow.some(cell => 
+        cell && typeof cell === 'string' && 
+        (cell.toLowerCase().includes('celda') || 
+         cell.toLowerCase().includes('cod_celda') ||
+         cell.toLowerCase().includes('celda'))
+      )
+      
+      // Verificar que al menos tenga 2 de las 3 columnas clave
+      const keyColumnsFound = [hasMatricula, hasPoligono, hasCelda].filter(Boolean).length
+      
+      // Verificación adicional: asegurar que hay datos reales en las filas siguientes
+      if (keyColumnsFound >= 2) {
+        // Verificar que al menos una fila después de los encabezados tenga datos
+        for (let i = 1; i < Math.min(5, jsonData.length); i++) {
+          const row = jsonData[i] as any[]
+          if (row && row.length > 0) {
+            // Verificar que al menos una celda tenga contenido no vacío
+            const hasData = row.some(cell => 
+              cell !== null && 
+              cell !== undefined && 
+              cell !== '' && 
+              String(cell).trim().length > 0
+            )
+            if (hasData) {
+              return true
             }
           }
+        }
+        return false
+      }
+      
+      return false
+    } catch (error) {
+      return false
+      }
+  }
+
+  // Función para mapear columnas de manera inteligente
+  const mapColumns = (headers: string[]) => {
+    const mapping = {
+      matricula: headers.find(h => 
+        h && typeof h === 'string' && (
+          h.toLowerCase().includes('matricula') || 
+          h.toLowerCase().includes('instalacao') ||
+          h.toLowerCase().includes('codigo') ||
+          h.toLowerCase().includes('matrícula') ||
+          h.toLowerCase().includes('id') ||
+          h.toLowerCase().includes('instalacao')
+        )
+      ),
+      poligono: headers.find(h => 
+        h && typeof h === 'string' && (
+          h.toLowerCase().includes('poligono') || 
+          h.toLowerCase().includes('polígono') ||
+          h.toLowerCase().includes('cod_poligono') ||
+          h.toLowerCase().includes('poligono')
+        )
+      ),
+      celda: headers.find(h => 
+        h && typeof h === 'string' && (
+          h.toLowerCase().includes('celda') || 
+          h.toLowerCase().includes('cod_celda') ||
+          h.toLowerCase().includes('celda')
+        )
+      )
+    }
+    
+    console.log('Mapeo de columnas detectado:', mapping)
+    return mapping
+  }
 
           // Estrategia de detección inteligente de hoja mejorada
           let circuitSheet = ''
@@ -240,6 +277,9 @@ export default function ExcelComparisonApp() {
             header?.toString() || `Columna_${Math.random().toString(36).substr(2, 5)}`
           )
           
+          // Mapear columnas de manera inteligente
+          const columnMapping = mapColumns(headers)
+          
           // Obtener datos (filas restantes, excluyendo filas completamente vacías)
           const rows = jsonData.slice(1).filter((row: any) => {
             if (!row || row.length === 0) return false
@@ -273,18 +313,53 @@ export default function ExcelComparisonApp() {
             return strValue
           }
 
-          // Convertir filas a objetos
+          // Función para limpiar y normalizar valores
+          const cleanValue = (value: any): string => {
+            if (value === null || value === undefined) return ''
+            
+            const strValue = value.toString().trim()
+            
+            // Manejar valores especiales de Oracle
+            if (strValue === 'N/A' || strValue === 'NULL' || strValue === 'undefined') {
+              return ''
+            }
+            
+            // Limpiar espacios extra y caracteres especiales
+            return strValue.replace(/\s+/g, ' ').replace(/[^\w\s\-\.]/g, '')
+          }
+
+          // Convertir filas a objetos con mapeo inteligente
           const processedData = rows.map((row, index) => {
             const obj: Record<string, any> = {}
+            
+            // Usar mapeo inteligente para columnas clave
+            if (columnMapping.matricula) {
+              const value = row[headers.indexOf(columnMapping.matricula)]
+              obj['MATRICULA'] = cleanValue(value)
+            }
+            
+            if (columnMapping.poligono) {
+              const value = row[headers.indexOf(columnMapping.poligono)]
+              obj['CODIGO POLIGONO'] = cleanValue(value)
+            }
+            
+            if (columnMapping.celda) {
+              const value = row[headers.indexOf(columnMapping.celda)]
+              obj['CODIGO CELDA'] = cleanValue(value)
+            }
+            
+            // Agregar todas las columnas originales también
             headers.forEach((header, colIndex) => {
-              const value = row[colIndex]
-              // Manejar diferentes tipos de datos
-              if (value instanceof Date) {
-                obj[header] = value.toISOString().split('T')[0]
-              } else {
-                obj[header] = formatMatricula(value, header)
+              if (!obj[header]) { // Solo si no fue mapeada antes
+                const value = row[colIndex]
+                if (value instanceof Date) {
+                  obj[header] = value.toISOString().split('T')[0]
+                } else {
+                  obj[header] = cleanValue(value)
+                }
               }
             })
+            
             return obj
           })
           
@@ -807,6 +882,71 @@ ORDER BY instalacao;
     })
   }
 
+  // Función para limpiar archivo específico
+  const clearFile = (fileNumber: 1 | 2) => {
+    if (fileNumber === 1) {
+      setFile1(null)
+      // Si se limpia el archivo 1, también limpiar scripts de consulta
+      setQueryScript("")
+      setIsQueryScript(false)
+    } else {
+      setFile2(null)
+    }
+    
+    // Limpiar comparación si se eliminó uno de los archivos
+    if (!file1 || !file2) {
+      setComparison(null)
+      setScripts("")
+    }
+    
+    // Limpiar el input de archivo correspondiente
+    const fileInput = document.getElementById(`file-${fileNumber}`) as HTMLInputElement
+    if (fileInput) {
+      fileInput.value = ''
+    }
+    
+    toast({
+      title: `Archivo ${fileNumber} eliminado`,
+      description: `El archivo ${fileNumber} ha sido eliminado. Puedes cargar uno nuevo.`,
+    })
+  }
+
+  // Función para validar datos del archivo
+  const validateFileData = (data: Record<string, any>[]) => {
+    const issues: string[] = []
+    
+    // Verificar que haya datos
+    if (data.length === 0) {
+      issues.push("El archivo no contiene datos")
+      return issues
+    }
+    
+    // Verificar columnas clave
+    const firstRow = data[0]
+    const hasMatricula = firstRow['MATRICULA'] !== undefined
+    const hasPoligono = firstRow['CODIGO POLIGONO'] !== undefined
+    const hasCelda = firstRow['CODIGO CELDA'] !== undefined
+    
+    if (!hasMatricula) issues.push("No se detectó columna de matrícula")
+    if (!hasPoligono) issues.push("No se detectó columna de código de polígono")
+    if (!hasCelda) issues.push("No se detectó columna de código de celda")
+    
+    // Verificar que haya datos válidos
+    const validRows = data.filter(row => 
+      row['MATRICULA'] && 
+      row['MATRICULA'].toString().trim() !== '' &&
+      row['MATRICULA'].toString().trim() !== 'N/A'
+    )
+    
+    if (validRows.length === 0) {
+      issues.push("No se encontraron matrículas válidas (todas aparecen como N/A o vacías)")
+    } else if (validRows.length < data.length) {
+      issues.push(`${data.length - validRows.length} filas tienen datos inválidos o N/A`)
+    }
+    
+    return issues
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -1020,9 +1160,20 @@ ORDER BY instalacao;
                             <p className="text-sm text-gray-600">{file.size}</p>
                           </div>
                         </div>
-                        <Badge variant="secondary" className="bg-green-100 text-green-800">
-                          Procesado
-                        </Badge>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="secondary" className="bg-green-100 text-green-800">
+                            Procesado
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => clearFile(fileNum as 1 | 2)}
+                            className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                          >
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Limpiar
+                          </Button>
+                        </div>
                       </div>
                       
                       <div className="grid grid-cols-3 gap-4">
@@ -1051,6 +1202,53 @@ ORDER BY instalacao;
                         <p className="text-xs text-gray-500 mb-2">
                           Se seleccionó automáticamente la hoja con contenido válido. Si no es la correcta, puedes cambiarla manualmente.
                         </p>
+                        
+                        {/* Información de mapeo de columnas */}
+                        <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                          <p className="text-blue-800 mb-1">
+                            <strong>Mapeo de columnas detectado:</strong>
+                          </p>
+                          <div className="space-y-1">
+                            <p className="text-blue-700">
+                              • <strong>Matrícula:</strong> {file.data[0]?.['MATRICULA'] !== undefined ? '✅ Detectada' : '❌ No detectada'}
+                            </p>
+                            <p className="text-blue-700">
+                              • <strong>Polígono:</strong> {file.data[0]?.['CODIGO POLIGONO'] !== undefined ? '✅ Detectada' : '❌ No detectada'}
+                            </p>
+                            <p className="text-blue-700">
+                              • <strong>Celda:</strong> {file.data[0]?.['CODIGO CELDA'] !== undefined ? '✅ Detectada' : '❌ No detectada'}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Validación de datos */}
+                        {(() => {
+                          const issues = validateFileData(file.data)
+                          if (issues.length > 0) {
+                            return (
+                              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-xs">
+                                <p className="text-red-800 mb-1">
+                                  <strong>⚠️ Problemas detectados:</strong>
+                                </p>
+                                <ul className="text-red-700 space-y-1">
+                                  {issues.map((issue, index) => (
+                                    <li key={index}>• {issue}</li>
+                                  ))}
+                                </ul>
+                                <p className="text-red-600 mt-2">
+                                  <strong>Recomendación:</strong> Verifica el archivo exportado desde Oracle o selecciona otra hoja.
+                                </p>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                              <p className="text-green-800">
+                                <strong>✅ Datos válidos:</strong> El archivo contiene la estructura correcta para la comparación.
+                              </p>
+                            </div>
+                          )
+                        })()}
                         
                         {/* Selector manual de hojas */}
                         <div className="flex items-center space-x-2">
