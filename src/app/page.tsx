@@ -49,6 +49,8 @@ export default function ExcelComparisonApp() {
   const [file2, setFile2] = useState<FileData | null>(null)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const [scripts, setScripts] = useState<string>("")
+  const [queryScript, setQueryScript] = useState<string>("")
+  const [isQueryScript, setIsQueryScript] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
@@ -645,6 +647,14 @@ ${updateStatements}
     })
   }
 
+  const copyQueryScript = () => {
+    navigator.clipboard.writeText(queryScript)
+    toast({
+      title: "Script de consulta copiado",
+      description: "Script SQL copiado al portapapeles. Pégalo en Oracle.",
+    })
+  }
+
   const downloadScripts = () => {
     const blob = new Blob([scripts], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
@@ -712,7 +722,7 @@ SELECT
     cod_poligono,
     cod_celda
 FROM EDESURFLX_SGD.UTRANSFORMADORA_LT 
-WHERE instalacao IN (${matriculas.map(m => m).join(', ')})
+WHERE instalacao IN (${matriculas.map(m => `'${m}'`).join(', ')})
 ORDER BY instalacao;
 
 -- =====================================================
@@ -725,21 +735,19 @@ ORDER BY instalacao;
 -- FIN DEL SCRIPT
 -- =====================================================`
 
-    // Crear y descargar el script de consulta
-    const blob = new Blob([queryScript], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `script_consulta_${file1.hojaProcesada}_${new Date().toISOString().split('T')[0]}.sql`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    // Mostrar el script de consulta en la app
+    setQueryScript(queryScript)
+    setIsQueryScript(true)
     
     toast({
       title: "Script de consulta generado",
-      description: `Script SQL descargado con ${matriculas.length} matrículas para consultar en Oracle`,
+      description: `Script SQL generado con ${matriculas.length} matrículas. Cópialo y ejecútalo en Oracle.`,
     })
+
+    // Actualizar el paso completado
+    if (!completedSteps.includes(1)) {
+      setCompletedSteps([...completedSteps, 1])
+    }
   }
 
   const updateStep = (step: 1 | 2 | 3) => {
@@ -781,6 +789,8 @@ ORDER BY instalacao;
     setFile2(null)
     setComparison(null)
     setScripts("")
+    setQueryScript("")
+    setIsQueryScript(false)
     setCurrentStep(1)
     setCompletedSteps([])
     
@@ -1180,6 +1190,36 @@ ORDER BY instalacao;
                     Generar Script de Consulta SQL
                   </Button>
                 </div>
+                
+                {/* Script de Consulta Generado */}
+                {queryScript && (
+                  <div className="mt-6 p-4 bg-white border border-orange-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-semibold text-orange-800">
+                        Script de Consulta SQL Generado
+                      </h4>
+                      <Button
+                        onClick={copyQueryScript}
+                        variant="outline"
+                        size="sm"
+                        className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copiar Script
+                      </Button>
+                    </div>
+                    
+                    <div className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto">
+                      <pre className="text-sm whitespace-pre-wrap">{queryScript}</pre>
+                    </div>
+                    
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Próximo paso:</strong> Copia este script y ejecútalo en Oracle para obtener los datos actuales de la base de datos.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
