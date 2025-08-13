@@ -177,7 +177,7 @@ export function CodeEditor({
       `}>
         {showLineNumbers && (
           <div className={`
-            absolute left-0 top-0 w-16 text-right pr-4 pt-4 pb-4 select-none
+            absolute left-0 top-0 w-20 text-right pr-4 pt-4 pb-4 select-none
             ${theme === "dark" ? "text-gray-500 bg-gray-900" : "text-gray-400 bg-white"}
             border-r ${theme === "dark" ? "border-gray-700" : "border-gray-200"}
           `}>
@@ -190,7 +190,7 @@ export function CodeEditor({
         )}
         
         <div className={`
-          pl-${showLineNumbers ? "20" : "4"} pr-4 py-4
+          ${showLineNumbers ? "pl-24" : "pl-4"} pr-4 py-4
           ${theme === "dark" ? "text-gray-200" : "text-gray-800"}
         `}>
           <pre className="text-sm leading-6 font-mono">
