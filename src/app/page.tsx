@@ -758,13 +758,26 @@ ${updateStatements}
       return
     }
 
-    // Extraer todas las matrículas del archivo 1
+    // Extraer y limpiar todas las matrículas del archivo 1
     const matriculas = file1.data
       .map(row => {
         const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula']
-        return matricula ? matricula.toString().trim() : null
+        if (!matricula) return null
+        
+        // Limpiar y normalizar matrícula
+        let clean = matricula.toString().trim()
+        
+        // Remover caracteres no numéricos
+        clean = clean.replace(/[^\d]/g, '')
+        
+        // Asegurar formato de 6 dígitos con ceros iniciales
+        if (clean.length < 6) {
+          clean = clean.padStart(6, '0')
+        }
+        
+        return clean
       })
-      .filter(matricula => matricula && matricula !== '')
+      .filter(matricula => matricula && matricula !== '' && matricula.length === 6)
 
     if (matriculas.length === 0) {
       toast({
@@ -790,15 +803,31 @@ ${updateStatements}
 -- Archivo fuente: ${file1.name}
 -- Total de matrículas a consultar: ${matriculas.length}
 -- =====================================================
+-- DIAGNÓSTICO DE MATRÍCULAS
+-- Total de matrículas originales: ${file1.data.length}
+-- Matrículas válidas después de limpieza: ${matriculas.length}
+-- Matrículas descartadas: ${file1.data.length - matriculas.length}
+-- =====================================================
 
 -- CONSULTA PARA OBTENER DATOS ACTUALES DE LA BASE DE DATOS
 -- Ejecuta este script en Oracle para obtener el archivo 2
+-- NOTA: Esta consulta maneja diferentes formatos de matrículas
+
 SELECT 
     instalacao,
     cod_poligono,
     cod_celda
 FROM EDESURFLX_SGD.UTRANSFORMADORA_LT 
-WHERE instalacao IN (${matriculas.map(m => `'${m}'`).join(', ')})
+WHERE (
+    -- Buscar por formato con ceros iniciales (recomendado)
+    TRIM(TO_CHAR(instalacao, '000000')) IN (${matriculas.map(m => `'${m}'`).join(', ')})
+    OR
+    -- Buscar por formato sin ceros iniciales
+    TRIM(TO_CHAR(instalacao)) IN (${matriculas.map(m => `'${m.replace(/^0+/, '')}'`).join(', ')})
+    OR
+    -- Buscar por número directo (si la columna es numérica)
+    TO_NUMBER(instalacao) IN (${matriculas.map(m => parseInt(m)).join(', ')})
+)
 ORDER BY instalacao;
 
 -- =====================================================
@@ -807,6 +836,13 @@ ORDER BY instalacao;
 -- 2. Exporta el resultado a CSV o XLSX
 -- 3. Carga ese archivo como "Archivo 2" en DataMatch
 -- 4. Ejecuta la comparación para generar el script de actualización
+-- =====================================================
+-- RESOLUCIÓN DE PROBLEMAS:
+-- Si obtienes menos registros de los esperados:
+-- 1. Verifica el tipo de dato de la columna INSTALACAO en Oracle
+-- 2. Ejecuta: SELECT column_name, data_type FROM user_tab_columns WHERE table_name = 'UTRANSFORMADORA_LT'
+-- 3. Verifica si hay espacios, ceros iniciales o formato diferente
+-- 4. Ajusta la consulta según el tipo de dato encontrado
 -- =====================================================
 -- FIN DEL SCRIPT
 -- =====================================================`
