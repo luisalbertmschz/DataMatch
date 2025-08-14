@@ -1,5 +1,15 @@
 "use client"
 
+/**
+ * DataMatch - Aplicación para comparación y sincronización de archivos Excel
+ * 
+ * SOLUCIÓN IMPLEMENTADA PARA PRESERVAR CEROS INICIALES:
+ * - Configuración de Excel: cellText: true, cellNF: false, cellDates: false
+ * - Esto preserva el formato original de las celdas (incluyendo ceros iniciales)
+ * - Elimina la necesidad de funciones de normalización manual
+ * - Compatible con todos los tipos de datos (números, letras, mixtos)
+ */
+
 import { useState } from "react"
 import { Upload, FileSpreadsheet, Play, Copy, CheckCircle, XCircle, Database, Code2, Download, BarChart3, Settings, RefreshCw } from 'lucide-react'
 import { Button } from "@/components/ui/button"
@@ -71,7 +81,14 @@ export default function ExcelComparisonApp() {
           
           // Importar xlsx dinámicamente para evitar problemas de SSR
           const XLSX = await import('xlsx')
-          const workbook = XLSX.read(data, { type: 'array' })
+          // Configurar Excel para preservar formato original (ceros iniciales, etc.)
+          const workbook = XLSX.read(data, { 
+            type: 'array',
+            cellText: true,      // Mantener como texto
+            cellDates: false,    // No convertir fechas
+            cellNF: false,       // No convertir números
+            cellStyles: false    // No procesar estilos
+          })
           
           if (workbook.SheetNames.length === 0) {
             throw new Error('El archivo Excel no contiene hojas')
@@ -313,13 +330,7 @@ export default function ExcelComparisonApp() {
             return strValue
           }
 
-          // Función para preservar formato original (sin modificar)
-          const preserveOriginalFormat = (value: any): string => {
-            if (value === null || value === undefined || value === '') {
-              return ''
-            }
-            return value.toString().trim()
-          }
+
 
           // Función para limpiar y normalizar valores
           const cleanValue = (value: any): string => {
@@ -447,7 +458,14 @@ export default function ExcelComparisonApp() {
     try {
       const data = new Uint8Array(await file.arrayBuffer())
       const XLSX = await import('xlsx')
-      const workbook = XLSX.read(data, { type: 'array' })
+      // Configurar Excel para preservar formato original
+      const workbook = XLSX.read(data, { 
+        type: 'array',
+        cellText: true,      // Mantener como texto
+        cellDates: false,    // No convertir fechas
+        cellNF: false,       // No convertir números
+        cellStyles: false    // No procesar estilos
+      })
       const worksheet = workbook.Sheets[sheetName]
       
       if (!worksheet) return null
@@ -504,16 +522,7 @@ export default function ExcelComparisonApp() {
     }
   }
 
-  // Función para normalizar matrículas (preservar ceros iniciales)
-  const normalizeMatricula = (matricula: any): string => {
-    if (!matricula) return ''
-    const strMatricula = matricula.toString().trim()
-    // Si es numérico, asegurar que tenga 6 dígitos con ceros iniciales
-    if (/^\d+$/.test(strMatricula)) {
-      return strMatricula.padStart(6, '0')
-    }
-    return strMatricula
-  }
+
 
   const compareFiles = () => {
     if (!file1 || !file2) return
@@ -534,7 +543,8 @@ export default function ExcelComparisonApp() {
       file1.data.forEach(row => {
         const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula']
         if (matricula) {
-          const normalizedMatricula = normalizeMatricula(matricula)
+          // Usar el valor directo ya que Excel ahora preserva el formato original
+          const normalizedMatricula = matricula.toString().trim()
           file1Map.set(normalizedMatricula, row)
         }
       })
@@ -543,7 +553,8 @@ export default function ExcelComparisonApp() {
       file2.data.forEach(row => {
         const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula']
         if (matricula) {
-          const normalizedMatricula = normalizeMatricula(matricula)
+          // Usar el valor directo ya que Excel ahora preserva el formato original
+          const normalizedMatricula = matricula.toString().trim()
           file2Map.set(normalizedMatricula, row)
         }
       })
@@ -768,8 +779,13 @@ ${updateStatements}
 
     // Extraer todas las matrículas del archivo 1 (preservar formato original)
     // Usar datos originales del archivo para preservar ceros iniciales
+    console.log('=== DEBUGGING MATRÍCULAS ===')
+    console.log('file1.data[0]:', file1.data[0])
+    console.log('file1.data[1]:', file1.data[1])
+    console.log('file1.data[2]:', file1.data[2])
+    
     const matriculas = file1.data
-      .map(row => {
+      .map((row, index) => {
         // Buscar en todas las posibles variaciones de nombre de columna
         const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula'] || 
                          row['INSTALACAO'] || row['instalacao'] || row['Instalacao'] ||
@@ -781,12 +797,23 @@ ${updateStatements}
         // Preservar formato original sin modificar
         const originalValue = matricula.toString().trim()
         
-        // Log para debugging
-        console.log('Matrícula original:', originalValue, 'Tipo:', typeof matricula)
+        // Log detallado para debugging
+        console.log(`Fila ${index}:`, {
+          rawValue: matricula,
+          originalValue: originalValue,
+          type: typeof matricula,
+          hasLeadingZero: originalValue.startsWith('0'),
+          length: originalValue.length
+        })
         
         return originalValue
       })
       .filter(matricula => matricula && matricula !== '')
+    
+    console.log('=== MATRÍCULAS FINALES ===')
+    console.log('Total:', matriculas.length)
+    console.log('Primeras 5:', matriculas.slice(0, 5))
+    console.log('Últimas 5:', matriculas.slice(-5))
 
     if (matriculas.length === 0) {
       toast({
@@ -798,6 +825,9 @@ ${updateStatements}
     }
 
     // Generar el script de consulta
+    console.log('=== GENERANDO SCRIPT SQL ===')
+    console.log('Matrículas a usar:', matriculas.slice(0, 10))
+    
     const queryScript = `-- =====================================================
 -- SCRIPT DE CONSULTA PARA OBTENER DATOS ACTUALES DE LA BD
 -- =====================================================
@@ -848,6 +878,9 @@ ORDER BY instalacao;
 -- =====================================================`
 
     // Mostrar el script de consulta en la app
+    console.log('=== SCRIPT FINAL GENERADO ===')
+    console.log('Script completo:', queryScript)
+    
     setQueryScript(queryScript)
     setIsQueryScript(true)
     
