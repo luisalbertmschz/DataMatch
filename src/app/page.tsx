@@ -338,6 +338,16 @@ export default function ExcelComparisonApp() {
             
             const strValue = value.toString().trim()
             
+            // Debug: Log para columnas clave
+            if (isKeyColumn) {
+              console.log('cleanValue - Columna clave:', {
+                inputValue: value,
+                outputValue: strValue,
+                type: typeof value,
+                hasLeadingZero: strValue.startsWith('0')
+              })
+            }
+            
             // Manejar valores especiales de Oracle
             if (strValue === 'N/A' || strValue === 'NULL' || strValue === 'undefined') {
               return ''
@@ -357,19 +367,29 @@ export default function ExcelComparisonApp() {
           const processedData = rows.map((row, index) => {
             const obj: Record<string, any> = {}
             
+            // Debug: Log de datos crudos para las primeras 3 filas
+            if (index < 3) {
+              console.log(`=== FILA ${index} - DATOS CRUDOS ===`)
+              console.log('Row completa:', row)
+              console.log('Headers:', headers)
+              console.log('Column mapping:', columnMapping)
+            }
+            
             // Usar mapeo inteligente para columnas clave
             if (columnMapping.matricula) {
               const value = row[headers.indexOf(columnMapping.matricula)]
               const cleanedValue = cleanValue(value, true) // Preservar formato original
               obj['MATRICULA'] = cleanedValue
               
-              // Debug: Log para las primeras 3 filas
+              // Debug: Log detallado para las primeras 3 filas
               if (index < 3) {
                 console.log(`Fila ${index} - MATRICULA:`, {
                   rawValue: value,
                   cleanedValue: cleanedValue,
                   type: typeof value,
-                  hasLeadingZero: cleanedValue.startsWith('0')
+                  hasLeadingZero: cleanedValue.startsWith('0'),
+                  columnIndex: headers.indexOf(columnMapping.matricula),
+                  originalHeader: columnMapping.matricula
                 })
               }
             }
