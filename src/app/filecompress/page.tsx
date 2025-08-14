@@ -165,7 +165,24 @@ export default function FileCompress() {
     script += `-- Total instalaciones a validar: ${allInstalaciones.length}\n`
     script += `-- ===========================================\n\n`
 
-    script += `-- VALIDACIÓN DE EXISTENCIA EN UTRANSFORMADORA_LT\n`
+    // Verificar si superamos el límite de Oracle (1000 expresiones)
+    if (allInstalaciones.length > 1000) {
+      script += `-- ⚠️  ADVERTENCIA: Se supera el límite de 1000 expresiones en Oracle IN\n`
+      script += `-- Se generará script con división automática en chunks\n\n`
+      
+      // Generar script con chunks
+      script += generateChunkedValidationScript(allInstalaciones)
+    } else {
+      // Generar script normal (menos de 1000 instalaciones)
+      script += generateNormalValidationScript(allInstalaciones)
+    }
+
+    setValidationScript(script)
+  }
+
+  // Generar script normal (menos de 1000 instalaciones)
+  const generateNormalValidationScript = (allInstalaciones: Array<{instalacao: string, circuito: string}>) => {
+    let script = `-- VALIDACIÓN DE EXISTENCIA EN UTRANSFORMADORA_LT\n`
     script += `SELECT \n`
     script += `    'VALIDACION' as tipo,\n`
     script += `    instalacao,\n`
@@ -210,7 +227,96 @@ export default function FileCompress() {
     script += `) subquery\n`
     script += `GROUP BY circuito_origen;\n`
 
-    setValidationScript(script)
+    return script
+  }
+
+  // Generar script con chunks (más de 1000 instalaciones)
+  const generateChunkedValidationScript = (allInstalaciones: Array<{instalacao: string, circuito: string}>) => {
+    const CHUNK_SIZE = 1000
+    const chunks = []
+    
+    // Dividir en chunks de 1000
+    for (let i = 0; i < allInstalaciones.length; i += CHUNK_SIZE) {
+      chunks.push(allInstalaciones.slice(i, i + CHUNK_SIZE))
+    }
+
+    let script = `-- SOLUCIÓN 1: DIVISIÓN EN CHUNKS (Recomendado para Oracle)\n`
+    script += `-- Se dividieron ${allInstalaciones.length} instalaciones en ${chunks.length} chunks de máximo ${CHUNK_SIZE}\n\n`
+
+    // Generar cada chunk
+    chunks.forEach((chunk, chunkIndex) => {
+      script += `-- CHUNK ${chunkIndex + 1} (${chunkIndex * CHUNK_SIZE + 1}-${Math.min((chunkIndex + 1) * CHUNK_SIZE, allInstalaciones.length)})\n`
+      script += `SELECT \n`
+      script += `    'VALIDACION' as tipo,\n`
+      script += `    instalacao,\n`
+      script += `    '${chunk[0]?.circuito || 'CIRCUITO'}' as circuito_origen,\n`
+      script += `    CASE \n`
+      script += `        WHEN COUNT(*) > 0 THEN 'EXISTE'\n`
+      script += `        ELSE 'NO_EXISTE'\n`
+      script += `    END as estado,\n`
+      script += `    COUNT(*) as registros_encontrados\n`
+      script += `FROM EDESURFLX_SGD.UTRANSFORMADORA_LT \n`
+      script += `WHERE instalacao IN (\n`
+
+      chunk.forEach((item, index) => {
+        script += `    '${item.instalacao}'${index < chunk.length - 1 ? ',' : ''}  -- ${item.circuito}\n`
+      })
+
+      script += `)\n`
+      script += `GROUP BY instalacao\n`
+      script += `ORDER BY instalacao\n`
+      
+      if (chunkIndex < chunks.length - 1) {
+        script += `UNION ALL\n\n`
+      } else {
+        script += `;\n\n`
+      }
+    })
+
+    // Agregar resumen por circuito
+    script += `-- RESUMEN POR CIRCUITO (Combinando todos los chunks)\n`
+    script += `SELECT \n`
+    script += `    circuito_origen,\n`
+    script += `    COUNT(*) as total_instalaciones,\n`
+    script += `    SUM(CASE WHEN estado = 'EXISTE' THEN 1 ELSE 0 END) as existentes,\n`
+    script += `    SUM(CASE WHEN estado = 'NO_EXISTE' THEN 1 ELSE 0 END) as no_existentes\n`
+    script += `FROM (\n`
+    script += `    -- Aquí debes ejecutar todos los chunks anteriores y combinar resultados\n`
+    script += `    -- O usar la siguiente alternativa con tabla temporal\n`
+    script += `) subquery\n`
+    script += `GROUP BY circuito_origen;\n\n`
+
+    // Agregar alternativa con tabla temporal
+    script += `-- SOLUCIÓN 2: TABLA TEMPORAL (Alternativa más eficiente)\n`
+    script += `-- Crear tabla temporal\n`
+    script += `CREATE GLOBAL TEMPORARY TABLE TEMP_INSTALACIONES (\n`
+    script += `    instalacao VARCHAR2(20),\n`
+    script += `    circuito VARCHAR2(50)\n`
+    script += `) ON COMMIT PRESERVE ROWS;\n\n`
+
+    script += `-- Insertar todas las instalaciones\n`
+    allInstalaciones.forEach((item, index) => {
+      script += `INSERT INTO TEMP_INSTALACIONES VALUES ('${item.instalacao}', '${item.circuito}');\n`
+    })
+
+    script += `\n-- Consulta usando JOIN (sin límite de 1000)\n`
+    script += `SELECT \n`
+    script += `    t.instalacao,\n`
+    script += `    t.circuito as circuito_origen,\n`
+    script += `    CASE \n`
+    script += `        WHEN COUNT(u.instalacao) > 0 THEN 'EXISTE'\n`
+    script += `        ELSE 'NO_EXISTE'\n`
+    script += `    END as estado,\n`
+    script += `    COUNT(u.instalacao) as registros_encontrados\n`
+    script += `FROM TEMP_INSTALACIONES t\n`
+    script += `LEFT JOIN EDESURFLX_SGD.UTRANSFORMADORA_LT u ON t.instalacao = u.instalacao\n`
+    script += `GROUP BY t.instalacao, t.circuito\n`
+    script += `ORDER BY t.circuito, t.instalacao;\n\n`
+
+    script += `-- Limpiar tabla temporal\n`
+    script += `DROP TABLE TEMP_INSTALACIONES;\n`
+
+    return script
   }
 
   // Descargar archivo comprimido
@@ -438,6 +544,24 @@ export default function FileCompress() {
                       <div className="text-sm text-gray-600">Circuitos Únicos</div>
                     </div>
                   </div>
+
+                  {/* Advertencia de límite Oracle */}
+                  {files.reduce((total, file) => total + file.instalaciones.length, 0) > 1000 && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle className="w-5 h-5 text-yellow-600" />
+                        <div>
+                          <h4 className="font-medium text-yellow-800">
+                            ⚠️ Advertencia: Límite de Oracle Detectado
+                          </h4>
+                          <p className="text-sm text-yellow-700 mt-1">
+                            Se detectaron más de 1000 instalaciones. Oracle tiene un límite de 1000 expresiones en la cláusula IN. 
+                            El script de validación se generará automáticamente con división en chunks o usando tabla temporal.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
