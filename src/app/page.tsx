@@ -333,7 +333,7 @@ export default function ExcelComparisonApp() {
 
 
           // Función para limpiar y normalizar valores
-          const cleanValue = (value: any): string => {
+          const cleanValue = (value: any, isKeyColumn: boolean = false): string => {
             if (value === null || value === undefined) return ''
             
             const strValue = value.toString().trim()
@@ -343,7 +343,13 @@ export default function ExcelComparisonApp() {
               return ''
             }
             
-            // Limpiar espacios extra y caracteres especiales
+            // Para columnas clave (MATRICULA, CODIGO POLIGONO, CODIGO CELDA), 
+            // preservar formato original sin limpiar caracteres
+            if (isKeyColumn) {
+              return strValue
+            }
+            
+            // Para otras columnas, limpiar espacios extra y caracteres especiales
             return strValue.replace(/\s+/g, ' ').replace(/[^\w\s\-\.]/g, '')
           }
 
@@ -354,17 +360,28 @@ export default function ExcelComparisonApp() {
             // Usar mapeo inteligente para columnas clave
             if (columnMapping.matricula) {
               const value = row[headers.indexOf(columnMapping.matricula)]
-              obj['MATRICULA'] = cleanValue(value)
+              const cleanedValue = cleanValue(value, true) // Preservar formato original
+              obj['MATRICULA'] = cleanedValue
+              
+              // Debug: Log para las primeras 3 filas
+              if (index < 3) {
+                console.log(`Fila ${index} - MATRICULA:`, {
+                  rawValue: value,
+                  cleanedValue: cleanedValue,
+                  type: typeof value,
+                  hasLeadingZero: cleanedValue.startsWith('0')
+                })
+              }
             }
             
             if (columnMapping.poligono) {
               const value = row[headers.indexOf(columnMapping.poligono)]
-              obj['CODIGO POLIGONO'] = cleanValue(value)
+              obj['CODIGO POLIGONO'] = cleanValue(value, true) // Preservar formato original
             }
             
             if (columnMapping.celda) {
               const value = row[headers.indexOf(columnMapping.celda)]
-              obj['CODIGO CELDA'] = cleanValue(value)
+              obj['CODIGO CELDA'] = cleanValue(value, true) // Preservar formato original
             }
             
             // Agregar todas las columnas originales también
