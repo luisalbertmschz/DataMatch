@@ -11,7 +11,7 @@
  */
 
 import { useState } from "react"
-import { Upload, FileSpreadsheet, Play, Copy, CheckCircle, XCircle, Database, Code2, Download, BarChart3, Settings, RefreshCw } from 'lucide-react'
+import { Upload, FileSpreadsheet, Play, Copy, CheckCircle, XCircle, Database, Code2, Download, BarChart3, Settings, RefreshCw, FileText } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -1137,6 +1137,15 @@ ORDER BY instalacao;
               <Button variant="outline" size="sm">
                 <BarChart3 className="w-4 h-4 mr-2" />
                 Reportes
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.location.href = '/filecompress'}
+                className="border-green-300 text-green-600 hover:bg-green-50 hover:border-green-400"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                FileCompress
               </Button>
             </div>
           </div>
