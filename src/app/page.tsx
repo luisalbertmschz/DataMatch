@@ -832,7 +832,15 @@ ${updateStatements}
         if (!matricula) return null
         
         // Preservar formato original sin modificar
-        const originalValue = matricula.toString().trim()
+        let originalValue = matricula.toString().trim()
+        
+        // SOLUCIÓN DE EMERGENCIA: Detectar y corregir ceros iniciales perdidos
+        // Si es un número de 5 dígitos, probablemente perdió un cero inicial
+        if (/^\d{5}$/.test(originalValue)) {
+          const correctedValue = '0' + originalValue
+          console.log(`⚠️ CORRECCIÓN APLICADA: ${originalValue} → ${correctedValue}`)
+          originalValue = correctedValue
+        }
         
         // Log detallado para debugging
         console.log(`Fila ${index}:`, {
@@ -840,7 +848,8 @@ ${updateStatements}
           originalValue: originalValue,
           type: typeof matricula,
           hasLeadingZero: originalValue.startsWith('0'),
-          length: originalValue.length
+          length: originalValue.length,
+          wasCorrected: /^\d{5}$/.test(matricula.toString().trim())
         })
         
         return originalValue
