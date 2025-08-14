@@ -580,8 +580,14 @@ export default function ExcelComparisonApp() {
       file1.data.forEach(row => {
         const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula']
         if (matricula) {
-          // Usar el valor directo ya que Excel ahora preserva el formato original
-          const normalizedMatricula = matricula.toString().trim()
+          // Aplicar la misma lógica de corrección de ceros iniciales
+          let normalizedMatricula = matricula.toString().trim()
+          
+          // SOLUCIÓN DE EMERGENCIA: Detectar y corregir ceros iniciales perdidos
+          if (/^\d{5}$/.test(normalizedMatricula)) {
+            normalizedMatricula = '0' + normalizedMatricula
+          }
+          
           file1Map.set(normalizedMatricula, row)
         }
       })
@@ -590,8 +596,14 @@ export default function ExcelComparisonApp() {
       file2.data.forEach(row => {
         const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula']
         if (matricula) {
-          // Usar el valor directo ya que Excel ahora preserva el formato original
-          const normalizedMatricula = matricula.toString().trim()
+          // Aplicar la misma lógica de corrección de ceros iniciales
+          let normalizedMatricula = matricula.toString().trim()
+          
+          // SOLUCIÓN DE EMERGENCIA: Detectar y corregir ceros iniciales perdidos
+          if (/^\d{5}$/.test(normalizedMatricula)) {
+            normalizedMatricula = '0' + normalizedMatricula
+          }
+          
           file2Map.set(normalizedMatricula, row)
         }
       })
@@ -721,7 +733,12 @@ export default function ExcelComparisonApp() {
           updates.push(`cod_celda = ${d.codigoCelda.archivo1}`)
         }
         if (updates.length > 0) {
-          return `UPDATE EDESURFLX_SGD.UTRANSFORMADORA_LT SET ${updates.join(', ')} WHERE instalacao = ${d.matricula};`
+          // Corregir ceros iniciales para el script de actualización
+          let matriculaCorregida = d.matricula
+          if (/^\d{5}$/.test(matriculaCorregida)) {
+            matriculaCorregida = '0' + matriculaCorregida
+          }
+          return `UPDATE EDESURFLX_SGD.UTRANSFORMADORA_LT SET ${updates.join(', ')} WHERE instalacao = '${matriculaCorregida}';`
         }
         return null
       })
