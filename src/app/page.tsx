@@ -313,6 +313,14 @@ export default function ExcelComparisonApp() {
             return strValue
           }
 
+          // Función para preservar formato original (sin modificar)
+          const preserveOriginalFormat = (value: any): string => {
+            if (value === null || value === undefined || value === '') {
+              return ''
+            }
+            return value.toString().trim()
+          }
+
           // Función para limpiar y normalizar valores
           const cleanValue = (value: any): string => {
             if (value === null || value === undefined) return ''
@@ -759,10 +767,24 @@ ${updateStatements}
     }
 
     // Extraer todas las matrículas del archivo 1 (preservar formato original)
+    // Usar datos originales del archivo para preservar ceros iniciales
     const matriculas = file1.data
       .map(row => {
-        const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula']
-        return matricula ? matricula.toString().trim() : null
+        // Buscar en todas las posibles variaciones de nombre de columna
+        const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula'] || 
+                         row['INSTALACAO'] || row['instalacao'] || row['Instalacao'] ||
+                         row['CODIGO'] || row['codigo'] || row['Codigo'] ||
+                         row['ID'] || row['id'] || row['Id']
+        
+        if (!matricula) return null
+        
+        // Preservar formato original sin modificar
+        const originalValue = matricula.toString().trim()
+        
+        // Log para debugging
+        console.log('Matrícula original:', originalValue, 'Tipo:', typeof matricula)
+        
+        return originalValue
       })
       .filter(matricula => matricula && matricula !== '')
 
@@ -793,6 +815,9 @@ ${updateStatements}
 -- DIAGNÓSTICO DE MATRÍCULAS
 -- Total de matrículas extraídas: ${matriculas.length}
 -- Formato preservado del archivo original
+-- =====================================================
+-- EJEMPLOS DE MATRÍCULAS (primeras 5):
+${matriculas.slice(0, 5).map(m => `-- ${m}`).join('\n')}
 -- =====================================================
 
 -- CONSULTA PARA OBTENER DATOS ACTUALES DE LA BASE DE DATOS
