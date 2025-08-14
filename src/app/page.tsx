@@ -1842,7 +1842,21 @@ ORDER BY instalacao;
                                   {file?.data.map((row, rowIndex) => (
                                     <TableRow key={rowIndex} className="hover:bg-gray-50">
                                       <TableCell className="text-sm text-gray-600 font-medium">
-                                        {row['MATRICULA'] || row['matricula'] || row['Matricula'] || 'N/A'}
+                                        {(() => {
+                                          const matricula = row['MATRICULA'] || row['matricula'] || row['Matricula'] || 'N/A'
+                                          if (matricula === 'N/A') return 'N/A'
+                                          
+                                          // Aplicar la misma lógica de corrección de ceros iniciales
+                                          let correctedMatricula = matricula.toString().trim()
+                                          if (/^\d+$/.test(correctedMatricula)) {
+                                            const digitCount = correctedMatricula.length
+                                            if (digitCount < 6) {
+                                              const zerosNeeded = 6 - digitCount
+                                              correctedMatricula = '0'.repeat(zerosNeeded) + correctedMatricula
+                                            }
+                                          }
+                                          return correctedMatricula
+                                        })()}
                                       </TableCell>
                                       <TableCell className="text-sm text-gray-600">
                                         {row['CODIGO POLIGONO'] || row['CODIGO_POLIGONO'] || row['codigo_poligono'] || 'N/A'}
