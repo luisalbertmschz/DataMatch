@@ -584,8 +584,13 @@ export default function ExcelComparisonApp() {
           let normalizedMatricula = matricula.toString().trim()
           
           // SOLUCIÓN DE EMERGENCIA: Detectar y corregir ceros iniciales perdidos
-          if (/^\d{5}$/.test(normalizedMatricula)) {
-            normalizedMatricula = '0' + normalizedMatricula
+          // Detectar números que necesitan ceros iniciales para llegar a 6 dígitos
+          if (/^\d+$/.test(normalizedMatricula)) {
+            const digitCount = normalizedMatricula.length
+            if (digitCount < 6) {
+              const zerosNeeded = 6 - digitCount
+              normalizedMatricula = '0'.repeat(zerosNeeded) + normalizedMatricula
+            }
           }
           
           file1Map.set(normalizedMatricula, row)
@@ -600,8 +605,13 @@ export default function ExcelComparisonApp() {
           let normalizedMatricula = matricula.toString().trim()
           
           // SOLUCIÓN DE EMERGENCIA: Detectar y corregir ceros iniciales perdidos
-          if (/^\d{5}$/.test(normalizedMatricula)) {
-            normalizedMatricula = '0' + normalizedMatricula
+          // Detectar números que necesitan ceros iniciales para llegar a 6 dígitos
+          if (/^\d+$/.test(normalizedMatricula)) {
+            const digitCount = normalizedMatricula.length
+            if (digitCount < 6) {
+              const zerosNeeded = 6 - digitCount
+              normalizedMatricula = '0'.repeat(zerosNeeded) + normalizedMatricula
+            }
           }
           
           file2Map.set(normalizedMatricula, row)
@@ -852,11 +862,15 @@ ${updateStatements}
         let originalValue = matricula.toString().trim()
         
         // SOLUCIÓN DE EMERGENCIA: Detectar y corregir ceros iniciales perdidos
-        // Si es un número de 5 dígitos, probablemente perdió un cero inicial
-        if (/^\d{5}$/.test(originalValue)) {
-          const correctedValue = '0' + originalValue
-          console.log(`⚠️ CORRECCIÓN APLICADA: ${originalValue} → ${correctedValue}`)
-          originalValue = correctedValue
+        // Detectar números que necesitan ceros iniciales para llegar a 6 dígitos
+        if (/^\d+$/.test(originalValue)) {
+          const digitCount = originalValue.length
+          if (digitCount < 6) {
+            const zerosNeeded = 6 - digitCount
+            const correctedValue = '0'.repeat(zerosNeeded) + originalValue
+            console.log(`⚠️ CORRECCIÓN APLICADA: ${originalValue} → ${correctedValue} (agregados ${zerosNeeded} ceros)`)
+            originalValue = correctedValue
+          }
         }
         
         // Log detallado para debugging
