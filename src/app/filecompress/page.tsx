@@ -5,21 +5,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { CodeEditor } from '@/components/ui/code-editor'
 import { 
   Upload, 
   FileText, 
   Download, 
-  Eye, 
+  Copy, 
   Trash2, 
   CheckCircle, 
   AlertCircle,
   Database,
-  FileCode
+  FileCode,
+  Mail
 } from 'lucide-react'
 
 interface ProcessedFile {
@@ -31,13 +31,6 @@ interface ProcessedFile {
   circuito: string
 }
 
-interface ValidationResult {
-  instalacao: string
-  circuito: string
-  estado: 'EXISTE' | 'NO_EXISTE'
-  registros_encontrados: number
-}
-
 export default function FileCompress() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -46,12 +39,11 @@ export default function FileCompress() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [compressedContent, setCompressedContent] = useState('')
   const [validationScript, setValidationScript] = useState('')
-  const [validationResults, setValidationResults] = useState<ValidationResult[]>([])
+  const [emailMessage, setEmailMessage] = useState('')
   const [activeTab, setActiveTab] = useState('upload')
 
   // Extraer circuito del nombre del archivo
   const extractCircuitFromFileName = (fileName: string): string => {
-    // Buscar patrones comunes en nombres de archivos
     const patterns = [
       /(LPRA\d+)/i,      // LPRA110, LPRA103, etc.
       /(PALA\d+)/i,      // PALA103, PALA110, etc.
@@ -66,7 +58,6 @@ export default function FileCompress() {
       }
     }
     
-    // Si no hay patrón, usar el nombre del archivo sin extensión
     return fileName.replace(/\.sql$/i, '').substring(0, 15) || 'CIRCUITO_DESCONOCIDO'
   }
 
@@ -102,28 +93,27 @@ export default function FileCompress() {
           id: `${Date.now()}-${i}`,
           name: file.name,
           size: file.size,
-          content,
-          instalaciones,
-          circuito
+          content: content,
+          instalaciones: instalaciones,
+          circuito: circuito
         })
       }
 
       setFiles(newFiles)
-      toast({
-        title: "Archivos procesados",
-        description: `Se procesaron ${newFiles.length} archivos SQL exitosamente.`,
-      })
-
-      // Generar contenido comprimido automáticamente
+      
       if (newFiles.length > 0) {
         generateCompressedFile(newFiles)
         generateValidationScript(newFiles)
+        generateEmailMessage(newFiles)
       }
 
-    } catch (error) {
-      console.error('Error procesando archivos:', error)
       toast({
-        title: "Error",
+        title: "Archivos procesados",
+        description: `${newFiles.length} archivos SQL procesados exitosamente.`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error al procesar archivos",
         description: "Ocurrió un error al procesar los archivos.",
         variant: "destructive"
       })
@@ -134,64 +124,43 @@ export default function FileCompress() {
 
   // Generar archivo comprimido
   const generateCompressedFile = (fileList: ProcessedFile[]) => {
-    let compressed = `-- ===========================================\n`
-    compressed += `-- ARCHIVO COMPRIMIDO GENERADO POR FILECOMPRESS\n`
-    compressed += `-- Fecha: ${new Date().toLocaleString()}\n`
-    compressed += `-- Total archivos: ${fileList.length}\n`
-    compressed += `-- ===========================================\n\n`
+    let content = `-- ===========================================\n`
+    content += `-- ARCHIVO COMPRIMIDO GENERADO POR FILECOMPRESS\n`
+    content += `-- Fecha: ${new Date().toLocaleString()}\n`
+    content += `-- Total archivos: ${fileList.length}\n`
+    content += `-- ===========================================\n\n`
 
     fileList.forEach((file, index) => {
-      compressed += `-- ARCHIVO ${index + 1}: ${file.name}\n`
-      compressed += `-- CIRCUITO: ${file.circuito}\n`
-      compressed += `-- INSTALACIONES: ${file.instalaciones.length}\n`
-      compressed += `-- ===========================================\n`
-      compressed += file.content
-      compressed += `\n\n`
+      content += `-- ARCHIVO ${index + 1}: ${file.name}\n`
+      content += `-- Circuito: ${file.circuito}\n`
+      content += `-- Instalaciones: ${file.instalaciones.length}\n`
+      content += `-- ===========================================\n\n`
+      content += file.content
+      content += `\n\n`
     })
 
-    setCompressedContent(compressed)
+    setCompressedContent(content)
   }
 
-  // Generar script de validación
+  // Generar script de validación simple
   const generateValidationScript = (fileList: ProcessedFile[]) => {
     const allInstalaciones = fileList.flatMap(file => 
       file.instalaciones.map(inst => ({ instalacao: inst, circuito: file.circuito }))
     )
 
     let script = `-- ===========================================\n`
-    script += `-- SCRIPT DE VALIDACIÓN GENERADO POR FILECOMPRESS\n`
+    script += `-- SCRIPT DE VALIDACIÓN SIMPLE\n`
     script += `-- Fecha: ${new Date().toLocaleString()}\n`
-    script += `-- Total archivos procesados: ${fileList.length}\n`
-    script += `-- Total instalaciones a validar: ${allInstalaciones.length}\n`
+    script += `-- Total instalaciones: ${allInstalaciones.length}\n`
     script += `-- ===========================================\n\n`
 
-    // Verificar si superamos el límite de Oracle (1000 expresiones)
-    if (allInstalaciones.length > 1000) {
-      script += `-- ⚠️  ADVERTENCIA: Se supera el límite de 1000 expresiones en Oracle IN\n`
-      script += `-- Se generará script con división automática en chunks\n\n`
-      
-      // Generar script con chunks
-      script += generateChunkedValidationScript(allInstalaciones)
-    } else {
-      // Generar script normal (menos de 1000 instalaciones)
-      script += generateNormalValidationScript(allInstalaciones)
-    }
-
-    setValidationScript(script)
-  }
-
-  // Generar script normal (menos de 1000 instalaciones)
-  const generateNormalValidationScript = (allInstalaciones: Array<{instalacao: string, circuito: string}>) => {
-    let script = `-- VALIDACIÓN DE EXISTENCIA EN UTRANSFORMADORA_LT\n`
+    script += `-- VALIDAR EXISTENCIA EN UTRANSFORMADORA_LT\n`
     script += `SELECT \n`
-    script += `    'VALIDACION' as tipo,\n`
     script += `    instalacao,\n`
-    script += `    '${allInstalaciones[0]?.circuito || 'CIRCUITO'}' as circuito_origen,\n`
     script += `    CASE \n`
     script += `        WHEN COUNT(*) > 0 THEN 'EXISTE'\n`
     script += `        ELSE 'NO_EXISTE'\n`
-    script += `    END as estado,\n`
-    script += `    COUNT(*) as registros_encontrados\n`
+    script += `    END as estado\n`
     script += `FROM EDESURFLX_SGD.UTRANSFORMADORA_LT \n`
     script += `WHERE instalacao IN (\n`
 
@@ -203,15 +172,13 @@ export default function FileCompress() {
     script += `GROUP BY instalacao\n`
     script += `ORDER BY instalacao;\n\n`
 
-    script += `-- RESUMEN POR CIRCUITO\n`
+    script += `-- RESUMEN TOTAL\n`
     script += `SELECT \n`
-    script += `    circuito_origen,\n`
     script += `    COUNT(*) as total_instalaciones,\n`
     script += `    SUM(CASE WHEN estado = 'EXISTE' THEN 1 ELSE 0 END) as existentes,\n`
     script += `    SUM(CASE WHEN estado = 'NO_EXISTE' THEN 1 ELSE 0 END) as no_existentes\n`
     script += `FROM (\n`
     script += `    SELECT \n`
-    script += `        '${allInstalaciones[0]?.circuito || 'CIRCUITO'}' as circuito_origen,\n`
     script += `        instalacao,\n`
     script += `        CASE \n`
     script += `            WHEN COUNT(*) > 0 THEN 'EXISTE'\n`
@@ -224,99 +191,42 @@ export default function FileCompress() {
     })
     script += `    )\n`
     script += `    GROUP BY instalacao\n`
-    script += `) subquery\n`
-    script += `GROUP BY circuito_origen;\n`
+    script += `) subquery;\n`
 
-    return script
+    setValidationScript(script)
   }
 
-  // Generar script con chunks (más de 1000 instalaciones)
-  const generateChunkedValidationScript = (allInstalaciones: Array<{instalacao: string, circuito: string}>) => {
-    const CHUNK_SIZE = 1000
-    const chunks = []
+  // Generar mensaje amigable para el equipo
+  const generateEmailMessage = (fileList: ProcessedFile[]) => {
+    const totalInstalaciones = fileList.reduce((total, file) => total + file.instalaciones.length, 0)
+    const circuitos = [...new Set(fileList.map(f => f.circuito))]
     
-    // Dividir en chunks de 1000
-    for (let i = 0; i < allInstalaciones.length; i += CHUNK_SIZE) {
-      chunks.push(allInstalaciones.slice(i, i + CHUNK_SIZE))
-    }
+    const message = `Hola equipo de mantenimiento,
 
-    let script = `-- SOLUCIÓN 1: DIVISIÓN EN CHUNKS (Recomendado para Oracle)\n`
-    script += `-- Se dividieron ${allInstalaciones.length} instalaciones en ${chunks.length} chunks de máximo ${CHUNK_SIZE}\n\n`
+Necesitamos de su apoyo para ejecutar una actualización de polígonos y celdas en la base de datos.
 
-    // Generar cada chunk
-    chunks.forEach((chunk, chunkIndex) => {
-      script += `-- CHUNK ${chunkIndex + 1} (${chunkIndex * CHUNK_SIZE + 1}-${Math.min((chunkIndex + 1) * CHUNK_SIZE, allInstalaciones.length)})\n`
-      script += `SELECT \n`
-      script += `    'VALIDACION' as tipo,\n`
-      script += `    instalacao,\n`
-      script += `    '${chunk[0]?.circuito || 'CIRCUITO'}' as circuito_origen,\n`
-      script += `    CASE \n`
-      script += `        WHEN COUNT(*) > 0 THEN 'EXISTE'\n`
-      script += `        ELSE 'NO_EXISTE'\n`
-      script += `    END as estado,\n`
-      script += `    COUNT(*) as registros_encontrados\n`
-      script += `FROM EDESURFLX_SGD.UTRANSFORMADORA_LT \n`
-      script += `WHERE instalacao IN (\n`
+📊 RESUMEN DE LA ACTUALIZACIÓN:
+• Total de registros a actualizar: ${totalInstalaciones}
+• Archivos procesados: ${fileList.length}
+• Circuitos involucrados: ${circuitos.join(', ')}
 
-      chunk.forEach((item, index) => {
-        script += `    '${item.instalacao}'${index < chunk.length - 1 ? ',' : ''}  -- ${item.circuito}\n`
-      })
+🗄️ DETALLES TÉCNICOS:
+• Base de datos: EDESURFLX_SGD
+• Esquema: EDESURFLX_SGD
+• Tabla: UTRANSFORMADORA_LT
+• Campos a actualizar: cod_poligono, cod_celda
 
-      script += `)\n`
-      script += `GROUP BY instalacao\n`
-      script += `ORDER BY instalacao\n`
-      
-      if (chunkIndex < chunks.length - 1) {
-        script += `UNION ALL\n\n`
-      } else {
-        script += `;\n\n`
-      }
-    })
+📁 ARCHIVOS INCLUIDOS:
+${fileList.map((file, index) => `• ${index + 1}. ${file.name} (${file.instalaciones.length} instalaciones)`).join('\n')}
 
-    // Agregar resumen por circuito
-    script += `-- RESUMEN POR CIRCUITO (Combinando todos los chunks)\n`
-    script += `SELECT \n`
-    script += `    circuito_origen,\n`
-    script += `    COUNT(*) as total_instalaciones,\n`
-    script += `    SUM(CASE WHEN estado = 'EXISTE' THEN 1 ELSE 0 END) as existentes,\n`
-    script += `    SUM(CASE WHEN estado = 'NO_EXISTE' THEN 1 ELSE 0 END) as no_existentes\n`
-    script += `FROM (\n`
-    script += `    -- Aquí debes ejecutar todos los chunks anteriores y combinar resultados\n`
-    script += `    -- O usar la siguiente alternativa con tabla temporal\n`
-    script += `) subquery\n`
-    script += `GROUP BY circuito_origen;\n\n`
+🔍 VALIDACIÓN REQUERIDA:
+Se debe ejecutar primero el script de validación para verificar que todas las instalaciones existan en la tabla antes de proceder con la actualización.
 
-    // Agregar alternativa con tabla temporal
-    script += `-- SOLUCIÓN 2: TABLA TEMPORAL (Alternativa más eficiente)\n`
-    script += `-- Crear tabla temporal\n`
-    script += `CREATE GLOBAL TEMPORARY TABLE TEMP_INSTALACIONES (\n`
-    script += `    instalacao VARCHAR2(20),\n`
-    script += `    circuito VARCHAR2(50)\n`
-    script += `) ON COMMIT PRESERVE ROWS;\n\n`
+Por favor, confírmenme cuando puedan proceder con esta tarea.
 
-    script += `-- Insertar todas las instalaciones\n`
-    allInstalaciones.forEach((item, index) => {
-      script += `INSERT INTO TEMP_INSTALACIONES VALUES ('${item.instalacao}', '${item.circuito}');\n`
-    })
+Saludos cordiales.`
 
-    script += `\n-- Consulta usando JOIN (sin límite de 1000)\n`
-    script += `SELECT \n`
-    script += `    t.instalacao,\n`
-    script += `    t.circuito as circuito_origen,\n`
-    script += `    CASE \n`
-    script += `        WHEN COUNT(u.instalacao) > 0 THEN 'EXISTE'\n`
-    script += `        ELSE 'NO_EXISTE'\n`
-    script += `    END as estado,\n`
-    script += `    COUNT(u.instalacao) as registros_encontrados\n`
-    script += `FROM TEMP_INSTALACIONES t\n`
-    script += `LEFT JOIN EDESURFLX_SGD.UTRANSFORMADORA_LT u ON t.instalacao = u.instalacao\n`
-    script += `GROUP BY t.instalacao, t.circuito\n`
-    script += `ORDER BY t.circuito, t.instalacao;\n\n`
-
-    script += `-- Limpiar tabla temporal\n`
-    script += `DROP TABLE TEMP_INSTALACIONES;\n`
-
-    return script
+    setEmailMessage(message)
   }
 
   // Descargar archivo comprimido
@@ -360,7 +270,7 @@ export default function FileCompress() {
     setFiles([])
     setCompressedContent('')
     setValidationScript('')
-    setValidationResults([])
+    setEmailMessage('')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -378,9 +288,11 @@ export default function FileCompress() {
     if (updatedFiles.length > 0) {
       generateCompressedFile(updatedFiles)
       generateValidationScript(updatedFiles)
+      generateEmailMessage(updatedFiles)
     } else {
       setCompressedContent('')
       setValidationScript('')
+      setEmailMessage('')
     }
     
     toast({
@@ -412,18 +324,22 @@ export default function FileCompress() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="upload" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
             <Upload className="w-4 h-4 mr-2" />
             Cargar Archivos
           </TabsTrigger>
           <TabsTrigger value="compressed" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">
             <FileText className="w-4 h-4 mr-2" />
-            Archivo Comprimido
+            Archivo General
           </TabsTrigger>
           <TabsTrigger value="validation" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
             <Database className="w-4 h-4 mr-2" />
             Script Validación
+          </TabsTrigger>
+          <TabsTrigger value="email" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white">
+            <Mail className="w-4 h-4 mr-2" />
+            Mensaje para Mant
           </TabsTrigger>
         </TabsList>
 
@@ -488,6 +404,25 @@ export default function FileCompress() {
                     </Button>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">{files.length}</div>
+                      <div className="text-sm text-gray-600">Archivos Cargados</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {files.reduce((total, file) => total + file.instalaciones.length, 0)}
+                      </div>
+                      <div className="text-sm text-gray-600">Total Instalaciones</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {new Set(files.map(f => f.circuito)).size}
+                      </div>
+                      <div className="text-sm text-gray-600">Circuitos Únicos</div>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     {files.map((file) => (
                       <Card key={file.id} className="p-4">
@@ -513,9 +448,9 @@ export default function FileCompress() {
                               </div>
                             </div>
                           </div>
-                          <Button
-                            onClick={() => removeFile(file.id)}
-                            variant="ghost"
+                          <Button 
+                            onClick={() => removeFile(file.id)} 
+                            variant="outline" 
                             size="sm"
                             className="text-red-600 hover:text-red-700"
                           >
@@ -525,43 +460,6 @@ export default function FileCompress() {
                       </Card>
                     ))}
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{files.length}</div>
-                      <div className="text-sm text-gray-600">Archivos Cargados</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">
-                        {files.reduce((total, file) => total + file.instalaciones.length, 0)}
-                      </div>
-                      <div className="text-sm text-gray-600">Total Instalaciones</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {new Set(files.map(f => f.circuito)).size}
-                      </div>
-                      <div className="text-sm text-gray-600">Circuitos Únicos</div>
-                    </div>
-                  </div>
-
-                  {/* Advertencia de límite Oracle */}
-                  {files.reduce((total, file) => total + file.instalaciones.length, 0) > 1000 && (
-                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <AlertCircle className="w-5 h-5 text-yellow-600" />
-                        <div>
-                          <h4 className="font-medium text-yellow-800">
-                            ⚠️ Advertencia: Límite de Oracle Detectado
-                          </h4>
-                          <p className="text-sm text-yellow-700 mt-1">
-                            Se detectaron más de 1000 instalaciones. Oracle tiene un límite de 1000 expresiones en la cláusula IN. 
-                            El script de validación se generará automáticamente con división en chunks o usando tabla temporal.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -573,7 +471,7 @@ export default function FileCompress() {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FileText className="w-5 h-5" />
-                <span>Archivo Comprimido</span>
+                <span>Archivo General</span>
               </CardTitle>
               <CardDescription>
                 Contenido combinado de todos los archivos SQL cargados
@@ -584,7 +482,7 @@ export default function FileCompress() {
                 <>
                   <div className="flex items-center justify-between">
                     <Badge variant="outline" className="bg-green-50 text-green-700">
-                      Archivo comprimido generado
+                      Archivo general generado
                     </Badge>
                     <Button onClick={downloadCompressedFile} className="bg-green-600 hover:bg-green-700">
                       <Download className="w-4 h-4 mr-2" />
@@ -597,18 +495,14 @@ export default function FileCompress() {
                       code={compressedContent}
                       language="sql"
                       showLineNumbers={true}
-                      showThemeToggle={true}
-                      showCopyButton={true}
-                      showDownloadButton={false}
-                      height="600px"
                     />
                   </div>
                 </>
               ) : (
                 <div className="text-center py-12 text-gray-500">
                   <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg font-medium">No hay archivos comprimidos</p>
-                  <p className="text-sm">Carga archivos SQL en la pestaña "Cargar Archivos" para generar el contenido comprimido</p>
+                  <p className="text-lg font-medium">No hay archivo general</p>
+                  <p className="text-sm">Carga archivos SQL en la pestaña "Cargar Archivos" para generar el archivo general</p>
                 </div>
               )}
             </CardContent>
@@ -623,7 +517,7 @@ export default function FileCompress() {
                 <span>Script de Validación</span>
               </CardTitle>
               <CardDescription>
-                Script SQL para validar la existencia de instalaciones en UTRANSFORMADORA_LT
+                Script SQL simple para validar la existencia de instalaciones en UTRANSFORMADORA_LT
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -644,10 +538,6 @@ export default function FileCompress() {
                       code={validationScript}
                       language="sql"
                       showLineNumbers={true}
-                      showThemeToggle={true}
-                      showCopyButton={true}
-                      showDownloadButton={false}
-                      height="600px"
                     />
                   </div>
                 </>
@@ -656,6 +546,54 @@ export default function FileCompress() {
                   <Database className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                   <p className="text-lg font-medium">No hay script de validación</p>
                   <p className="text-sm">Carga archivos SQL en la pestaña "Cargar Archivos" para generar el script de validación</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="email" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Mail className="w-5 h-5" />
+                <span>Mensaje para Equipo de Mantenimiento</span>
+              </CardTitle>
+              <CardDescription>
+                Mensaje amigable con detalles técnicos para solicitar la ejecución de la actualización
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {emailMessage ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700">
+                      Mensaje generado
+                    </Badge>
+                    <Button onClick={() => navigator.clipboard.writeText(emailMessage)} className="bg-orange-600 hover:bg-orange-700">
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copiar Mensaje
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <Textarea
+                      value={emailMessage}
+                      onChange={(e) => setEmailMessage(e.target.value)}
+                      placeholder="El mensaje se generará automáticamente al cargar archivos..."
+                      className="min-h-[400px] font-mono text-sm"
+                    />
+                    
+                    <div className="text-sm text-gray-600">
+                      <p><strong>Nota:</strong> Puedes editar este mensaje antes de enviarlo al equipo de mantenimiento.</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Mail className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg font-medium">No hay mensaje generado</p>
+                  <p className="text-sm">Carga archivos SQL en la pestaña "Cargar Archivos" para generar el mensaje</p>
                 </div>
               )}
             </CardContent>
